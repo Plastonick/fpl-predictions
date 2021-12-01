@@ -6,35 +6,41 @@ import os
 from keras.models import Sequential
 from keras.layers import Dense
 
-directory = "./Fantasy-Premier-League/data/2021-22/players/"
+directory = "./Fantasy-Premier-League/data/"
 
 included = [*range(0, 11), *range(12, 29), 30]
-inputdim = 110
 X = []
 y = []
-for file in os.listdir(directory):
-    filename = os.fsdecode(file)
-    player_path = os.path.join(directory, filename)
-    if os.path.isdir(player_path):
-        included = [*range(0, 11), *range(12, 29), 30]
+for year in ["2019-20", "2020-21", "2021-22"]:
+    year_path = os.path.join(directory, year, "players")
+    if not os.path.isdir(year_path):
+        continue
 
-        player_data = np.loadtxt(
-            os.path.join(player_path, "gw.csv"),
-            delimiter=",",
-            skiprows=1,
-            usecols=included,
-        )
+    for file in os.listdir(year_path):
+        filename = os.fsdecode(file)
+        player_path = os.path.join(year_path, filename)
+        if os.path.isdir(player_path):
+            included = [*range(0, 11), *range(12, 29), 30]
 
-        shape = player_data.shape
-        if len(shape) < 2:
-            continue
+            player_data = np.loadtxt(
+                os.path.join(player_path, "gw.csv"),
+                delimiter=",",
+                skiprows=1,
+                usecols=included,
+            )
 
-        player_X = np.asarray(player_data[:-1, :10].flatten(), dtype=float)
-        if len(player_X) != inputdim:
-            continue
+            shape = player_data.shape
+            if len(shape) < 2:
+                continue
 
-        X = [*X, player_X]
-        y = [*y, *player_data[-1:, -6]]
+            if len(player_data) < 4:
+                continue
+
+            for i in range(len(player_data) - 4):
+                player_X = np.asarray(player_data[i:i + 3, :10].flatten(), dtype=float)
+
+                X = [*X, player_X]
+                y = [*y, player_data[i + 3, -6]]
 
 X = np.asarray(X)
 y = np.asarray(y)
@@ -67,14 +73,14 @@ print(training_y)
 
 # define the keras model
 model = Sequential()
-model.add(Dense(12, input_dim=inputdim, activation="relu"))
+model.add(Dense(12, input_dim=X.shape[1], activation="relu"))
 model.add(Dense(20, activation="relu"))
-model.add(Dense(10, activation="relu"))
+# model.add(Dense(10, activation="relu"))
 model.add(Dense(1, activation="relu"))
 
 model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
 
-model.fit(training_X, training_y, epochs=30, batch_size=5)
+model.fit(training_X, training_y, epochs=10, batch_size=10)
 
 _, accuracy = model.evaluate(training_X, training_y)
 print("Accuracy: %.2f" % (accuracy * 100))
