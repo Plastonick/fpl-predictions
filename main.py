@@ -1,6 +1,5 @@
 import numpy as np
 
-# from os.path import isdir, join
 import os
 
 from keras.models import Sequential
