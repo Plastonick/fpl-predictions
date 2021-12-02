@@ -2,10 +2,46 @@ import numpy as np
 
 import os
 
-from keras.models import Sequential
-from keras.layers import Dense
+# from keras.models import Sequential
+# from keras.layers import Dense
 
 directory = "./Fantasy-Premier-League/data/"
+headers = [
+    "assists",
+    "bonus",
+    "bps",
+    "clean_sheets",
+    "creativity",
+    "element",
+    "fixture",
+    "goals_conceded",
+    "goals_scored",
+    "ict_index",
+    "influence",
+    "kickoff_time",
+    "minutes",
+    "opponent_team",
+    "own_goals",
+    "penalties_missed",
+    "penalties_saved",
+    "red_cards",
+    "round",
+    "saves",
+    "selected",
+    "team_a_score",
+    "team_h_score",
+    "threat",
+    "total_points",
+    "transfers_balance",
+    "transfers_in",
+    "transfers_out",
+    "value",
+    "was_home",
+    "yellow_cards"
+]
+context_headers = [
+
+]
 
 included = [*range(0, 11), *range(12, 29), 30]
 X = []
@@ -21,10 +57,10 @@ for year in ["2019-20", "2020-21", "2021-22"]:
         if os.path.isdir(player_path):
             included = [*range(0, 11), *range(12, 29), 30]
 
-            player_data = np.loadtxt(
+            player_data = np.genfromtxt(
                 os.path.join(player_path, "gw.csv"),
                 delimiter=",",
-                skiprows=1,
+                names=True,
                 usecols=included,
             )
 
@@ -35,11 +71,15 @@ for year in ["2019-20", "2020-21", "2021-22"]:
             if len(player_data) < 4:
                 continue
 
-            for i in range(len(player_data) - 4):
-                player_X = np.asarray(player_data[i:i + 3, :10].flatten(), dtype=float)
+            for i in range(3, len(player_data)):
+                context = []
+                for gw in player_data[i-3:i]:
+                    context.append()
+
+                player_X = np.asarray(player_data[i-3:i].flatten(), dtype=float)
 
                 X = [*X, player_X]
-                y = [*y, player_data[i + 3, -6]]
+                y = [*y, player_data[i + 3]["total_points"]]
 
 X = np.asarray(X)
 y = np.asarray(y)
@@ -73,11 +113,11 @@ print(training_y)
 # define the keras model
 model = Sequential()
 model.add(Dense(12, input_dim=X.shape[1], activation="relu"))
-model.add(Dense(20, activation="relu"))
-# model.add(Dense(10, activation="relu"))
+model.add(Dense(10, activation="relu"))
+model.add(Dense(10, activation="relu"))
 model.add(Dense(1, activation="relu"))
 
-model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
+model.compile(loss="binary_crossentropy", metrics=["accuracy"])
 
 model.fit(training_X, training_y, epochs=10, batch_size=10)
 
