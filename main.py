@@ -2,8 +2,8 @@ import numpy as np
 
 import os
 
-# from keras.models import Sequential
-# from keras.layers import Dense
+from keras.models import Sequential
+from keras.layers import Dense
 
 directory = "./Fantasy-Premier-League/data/"
 headers = [
@@ -39,9 +39,29 @@ headers = [
     "was_home",
     "yellow_cards"
 ]
-context_headers = [
 
+# what part of the next game do I _know_ to help me predict?
+# TODO: include difficulty of fixture, avg. goals conceded/scored per team, position
+context_headers = [
+    # "fixture",
+    # "opponent_team",
+    # "value",
 ]
+
+# what important parts of completed games do I care about?
+history_headers = context_headers + [
+    "total_points",
+    "minutes",
+]
+
+
+# what do I want to predict?
+prediction_headers = [
+    "total_points",
+    # "minutes",
+]
+
+lookback = 5
 
 included = [*range(0, 11), *range(12, 29), 30]
 X = []
@@ -55,32 +75,51 @@ for year in ["2019-20", "2020-21", "2021-22"]:
         filename = os.fsdecode(file)
         player_path = os.path.join(year_path, filename)
         if os.path.isdir(player_path):
-            included = [*range(0, 11), *range(12, 29), 30]
-
             player_data = np.genfromtxt(
                 os.path.join(player_path, "gw.csv"),
                 delimiter=",",
-                names=True,
-                usecols=included,
+                names=True
             )
 
-            shape = player_data.shape
-            if len(shape) < 2:
+            if len(player_data.shape) == 0 or len(player_data) < lookback + 1:
                 continue
 
-            if len(player_data) < 4:
-                continue
+            last_three_years = [0 for i in range(3 * len(history_headers))]
+            history_path = os.path.join(player_path, "history.csv")
+            if os.path.isfile(history_path):
+                history_data = np.genfromtxt(
+                    os.path.join(player_path, "history.csv"),
+                    delimiter=",",
+                    names=True
+                )
 
-            for i in range(3, len(player_data)):
-                context = []
-                for gw in player_data[i-3:i]:
-                    context.append()
+                if len(history_data.shape) == 0:
+                    last_three_years[1] = history_data["total_points"]
+                else:
+                    for i in range(min(3, len(history_data))):
+                        h_idx = (-i - 1)
+                        last_three_years[i] = history_data[h_idx]["total_points"]
+                        last_three_years[i + 3] = history_data[h_idx]["minutes"]
 
-                player_X = np.asarray(player_data[i-3:i].flatten(), dtype=float)
+            a = 1
+            for prediction_week in range(lookback, len(player_data)):
+                known_values = last_three_years.copy()
 
-                X = [*X, player_X]
-                y = [*y, player_data[i + 3]["total_points"]]
+                for gw in player_data[prediction_week - lookback:prediction_week]:
+                    for header in history_headers:
+                        known_values.append(gw[header])
 
+                for header in context_headers:
+                    known_values.append(player_data[prediction_week][header])
+
+                prediction_values = []
+                for header in prediction_headers:
+                    prediction_values.append(player_data[prediction_week][header])
+
+                X.append(np.asarray(known_values, dtype=float))
+                y.append(np.asarray(prediction_values, dtype=float))
+
+print(len(X))
 X = np.asarray(X)
 y = np.asarray(y)
 a = 1
@@ -102,29 +141,57 @@ a = 1
 # load the dataset
 dataset = np.loadtxt("pima-indians-diabetes.csv", delimiter=",")
 # split into input (X) and output (y) variables
-training_X = X[10:]
-training_y = y[10:]
 
-predictor_X = X[:10]
-predictor_y = y[:10]
+data_size = len(X)
+p = np.random.permutation(len(X))
 
-print(training_y)
+X = X[p]
+y = y[p]
+
+testing_size = 30
+
+training_X = X[testing_size:data_size - testing_size]
+training_y = y[testing_size:data_size - testing_size]
+
+testing_X = X[:testing_size]
+testing_y = y[:testing_size]
+
+validation_X = X[data_size - testing_size:]
+validation_y = y[data_size - testing_size:]
+
+# model = Sequential()
+# model.add(
+#     LSTM(10,
+#          activation='relu',
+#          input_shape=(3, X.shape[1]))
+# )
+# model.add(Dense(1))
+# model.compile(optimizer='adam', loss='mse')
+#
+# model.fit_generator(training_X, epochs=25, verbose=1)
+#
+# prediction = model.predict_generator(testing_X)
+#
+# print(prediction)
+# print(testing_y)
 
 # define the keras model
 model = Sequential()
-model.add(Dense(12, input_dim=X.shape[1], activation="relu"))
-model.add(Dense(10, activation="relu"))
-model.add(Dense(10, activation="relu"))
-model.add(Dense(1, activation="relu"))
+model.add(Dense(15, input_dim=X.shape[1], activation="relu"))
+model.add(Dense(15, activation="relu"))
+model.add(Dense(15, activation="relu"))
+model.add(Dense(y.shape[1], activation="relu"))
 
-model.compile(loss="binary_crossentropy", metrics=["accuracy"])
+model.compile(loss="mse", metrics=["accuracy"], optimizer="adam")
 
-model.fit(training_X, training_y, epochs=10, batch_size=10)
+model.fit(training_X, training_y, epochs=10, batch_size=10, validation_data=(validation_X, validation_y))
 
 _, accuracy = model.evaluate(training_X, training_y)
 print("Accuracy: %.2f" % (accuracy * 100))
 
-predictions = model.predict(predictor_X)
+predictions = model.predict(testing_X)
 
-print(predictor_y)
-print(predictions)
+for i in range(len(testing_y)):
+    print(testing_X[i])
+    print(f"the model predicted {predictions[i]} ==> actually {testing_y[i]}")
+    print()
