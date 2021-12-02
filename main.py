@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 import os
 
@@ -46,14 +47,14 @@ context_headers = [
     # "fixture",
     # "opponent_team",
     # "value",
+    # "was_home",
 ]
 
 # what important parts of completed games do I care about?
-history_headers = context_headers + [
+look_back_headers = context_headers + [
     "total_points",
     "minutes",
 ]
-
 
 # what do I want to predict?
 prediction_headers = [
@@ -63,7 +64,6 @@ prediction_headers = [
 
 lookback = 5
 
-included = [*range(0, 11), *range(12, 29), 30]
 X = []
 y = []
 for year in ["2019-20", "2020-21", "2021-22"]:
@@ -71,42 +71,58 @@ for year in ["2019-20", "2020-21", "2021-22"]:
     if not os.path.isdir(year_path):
         continue
 
+    fixtures_path = os.path.join(directory, year, "fixtures.csv")
+    fixture_difficulty_map = {}
+    fixtures = pd.read_csv(fixtures_path).T
+
+    for i in range(fixtures.shape[1]):
+        fixture = fixtures[i]
+        fixture_difficulty_map[fixture["id"]] = (fixture["team_h_difficulty"], fixture["team_a_difficulty"])
+
     for file in os.listdir(year_path):
         filename = os.fsdecode(file)
         player_path = os.path.join(year_path, filename)
         if os.path.isdir(player_path):
-            player_data = np.genfromtxt(
-                os.path.join(player_path, "gw.csv"),
-                delimiter=",",
-                names=True
-            )
+            player_gw_path = os.path.join(player_path, "gw.csv")
+            # player_data = np.genfromtxt(
+            #     os.path.join(player_path, "gw.csv"),
+            #     delimiter=",",
+            #     names=True
+            # )
+            player_data = pd.read_csv(player_gw_path).T
 
-            if len(player_data.shape) == 0 or len(player_data) < lookback + 1:
+            if player_data.shape[1] < lookback + 1:
                 continue
 
-            last_three_years = [0 for i in range(3 * len(history_headers))]
+            last_three_years = [0 for i in range(6)]
             history_path = os.path.join(player_path, "history.csv")
             if os.path.isfile(history_path):
-                history_data = np.genfromtxt(
-                    os.path.join(player_path, "history.csv"),
-                    delimiter=",",
-                    names=True
-                )
+                history_data = pd.read_csv(history_path).T
+                num_histories = history_data.shape[1]
 
-                if len(history_data.shape) == 0:
-                    last_three_years[1] = history_data["total_points"]
-                else:
-                    for i in range(min(3, len(history_data))):
-                        h_idx = (-i - 1)
-                        last_three_years[i] = history_data[h_idx]["total_points"]
-                        last_three_years[i + 3] = history_data[h_idx]["minutes"]
+                for i in range(min(3, num_histories)):
+                    h_idx = num_histories - i - 1
+                    last_three_years[i] = history_data[h_idx]["total_points"]
+                    last_three_years[i + 3] = history_data[h_idx]["minutes"]
 
             a = 1
-            for prediction_week in range(lookback, len(player_data)):
+            for prediction_week in range(lookback, player_data.shape[1]):
                 known_values = last_three_years.copy()
 
-                for gw in player_data[prediction_week - lookback:prediction_week]:
-                    for header in history_headers:
+                for i in range(prediction_week - lookback, prediction_week):
+                    gw = player_data[i]
+                    fixture_id = gw["fixture"]
+                    was_home = gw["was_home"]
+
+                    if was_home:
+                        difficulty = fixture_difficulty_map[fixture_id][0]
+                    else:
+                        difficulty = fixture_difficulty_map[fixture_id][1]
+
+                    known_values.append(difficulty)
+                    known_values.append(1 if was_home else 0)
+
+                    for header in look_back_headers:
                         known_values.append(gw[header])
 
                 for header in context_headers:
@@ -159,22 +175,6 @@ testing_y = y[:testing_size]
 validation_X = X[data_size - testing_size:]
 validation_y = y[data_size - testing_size:]
 
-# model = Sequential()
-# model.add(
-#     LSTM(10,
-#          activation='relu',
-#          input_shape=(3, X.shape[1]))
-# )
-# model.add(Dense(1))
-# model.compile(optimizer='adam', loss='mse')
-#
-# model.fit_generator(training_X, epochs=25, verbose=1)
-#
-# prediction = model.predict_generator(testing_X)
-#
-# print(prediction)
-# print(testing_y)
-
 # define the keras model
 model = Sequential()
 model.add(Dense(15, input_dim=X.shape[1], activation="relu"))
@@ -192,6 +192,6 @@ print("Accuracy: %.2f" % (accuracy * 100))
 predictions = model.predict(testing_X)
 
 for i in range(len(testing_y)):
-    print(testing_X[i])
+    print([int(n) for n in testing_X[i]])
     print(f"the model predicted {predictions[i]} ==> actually {testing_y[i]}")
     print()
