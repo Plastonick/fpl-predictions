@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import os
 
@@ -62,39 +63,30 @@ prediction_headers = [
     # "minutes",
 ]
 
-lookback = 5
 
-X = []
-y = []
-for year in ["2019-20", "2020-21", "2021-22"]:
-    year_path = os.path.join(directory, year, "players")
-    if not os.path.isdir(year_path):
-        continue
+def build_year_data(lookback, year_path):
+    year_X = []
+    year_y = []
 
-    fixtures_path = os.path.join(directory, year, "fixtures.csv")
+    players_path = os.path.join(year_path, "players")
+    fixtures_path = os.path.join(year_path, "fixtures.csv")
     fixture_difficulty_map = {}
     fixtures = pd.read_csv(fixtures_path).T
-
     for i in range(fixtures.shape[1]):
         fixture = fixtures[i]
         fixture_difficulty_map[fixture["id"]] = (fixture["team_h_difficulty"], fixture["team_a_difficulty"])
 
-    for file in os.listdir(year_path):
+    for file in os.listdir(players_path):
         filename = os.fsdecode(file)
-        player_path = os.path.join(year_path, filename)
+        player_path = os.path.join(players_path, filename)
         if os.path.isdir(player_path):
             player_gw_path = os.path.join(player_path, "gw.csv")
-            # player_data = np.genfromtxt(
-            #     os.path.join(player_path, "gw.csv"),
-            #     delimiter=",",
-            #     names=True
-            # )
             player_data = pd.read_csv(player_gw_path).T
 
             if player_data.shape[1] < lookback + 1:
                 continue
 
-            last_three_years = [0 for i in range(6)]
+            last_three_years = [0 for _ in range(6)]
             history_path = os.path.join(player_path, "history.csv")
             if os.path.isfile(history_path):
                 history_data = pd.read_csv(history_path).T
@@ -105,7 +97,6 @@ for year in ["2019-20", "2020-21", "2021-22"]:
                     last_three_years[i] = history_data[h_idx]["total_points"]
                     last_three_years[i + 3] = history_data[h_idx]["minutes"]
 
-            a = 1
             for prediction_week in range(lookback, player_data.shape[1]):
                 known_values = last_three_years.copy()
 
@@ -132,31 +123,24 @@ for year in ["2019-20", "2020-21", "2021-22"]:
                 for header in prediction_headers:
                     prediction_values.append(player_data[prediction_week][header])
 
-                X.append(np.asarray(known_values, dtype=float))
-                y.append(np.asarray(prediction_values, dtype=float))
+                year_X.append(np.asarray(known_values, dtype=float))
+                year_y.append(np.asarray(prediction_values, dtype=float))
+
+    return year_X, year_y
+
+
+X = []
+y = []
+
+for year in ["2019-20", "2020-21"]:
+    yr_X, yr_y = build_year_data(year_path=os.path.join(directory, year), lookback=5)
+
+    X = [*X, *yr_X]
+    y = [*y, *yr_y]
 
 print(len(X))
 X = np.asarray(X)
 y = np.asarray(y)
-a = 1
-# dataset = np.loadtxt(
-#     "./data/data/2021-22/players/Aaron_Cresswell_411/gw.csv",
-#     delimiter=",",
-#     skiprows=1,
-#     usecols=[*range(0, 11), *range(12, 29), 30],
-# )
-
-# print(dataset.shape)
-
-# dataset2 = np.loadtxt("pima-indians-diabetes.csv", delimiter=",")
-#
-# # # X2 = dataset[:-1, :]
-# X2 = dataset2[:-1, :]
-# y2 = dataset2[-1:, -6]
-
-# load the dataset
-dataset = np.loadtxt("pima-indians-diabetes.csv", delimiter=",")
-# split into input (X) and output (y) variables
 
 data_size = len(X)
 p = np.random.permutation(len(X))
@@ -177,21 +161,32 @@ validation_y = y[data_size - testing_size:]
 
 # define the keras model
 model = Sequential()
-model.add(Dense(15, input_dim=X.shape[1], activation="relu"))
-model.add(Dense(15, activation="relu"))
-model.add(Dense(15, activation="relu"))
+model.add(Dense(6, input_dim=X.shape[1], activation="relu"))
+model.add(Dense(6, activation="relu"))
 model.add(Dense(y.shape[1], activation="relu"))
 
-model.compile(loss="mse", metrics=["accuracy"], optimizer="adam")
+model.compile(loss="mae", metrics=["accuracy"], optimizer="adam")
 
-model.fit(training_X, training_y, epochs=10, batch_size=10, validation_data=(validation_X, validation_y))
+model.fit(training_X, training_y, epochs=5, batch_size=10, validation_data=(validation_X, validation_y))
 
 _, accuracy = model.evaluate(training_X, training_y)
 print("Accuracy: %.2f" % (accuracy * 100))
 
 predictions = model.predict(testing_X)
 
-for i in range(len(testing_y)):
-    print([int(n) for n in testing_X[i]])
-    print(f"the model predicted {predictions[i]} ==> actually {testing_y[i]}")
-    print()
+# for j in range(len(testing_y)):
+#     print([int(n) for n in testing_X[j]])
+#     print(f"the model predicted {predictions[j]} ==> actually {testing_y[j]}")
+#     print()
+
+X_21, y_21 = build_year_data(lookback=5, year_path=os.path.join(directory, "2021-22"))
+
+X_21 = np.asarray(X_21)
+y_21 = np.asarray(y_21)
+
+pred_21 = model.predict(X_21)
+
+plt.plot(y_21, pred_21, "ro")
+plt.xlabel("actual")
+plt.ylabel("predicted")
+plt.show()
