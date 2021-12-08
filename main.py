@@ -33,10 +33,17 @@ y_21 = np.asarray(y_21)
 
 pred_21 = model.predict(X_21)
 
-line_x = np.linspace(-5, 5, 100)
+line_x = np.linspace(-5, 25, 2)
 line_y = 2 * line_x + 1
 
-plt.plot(y_21, pred_21, "r.")
+actual_scores = y_21[:, 0]
+predicted_scores = pred_21[:, 0]
+
+actual_minutes = y_21[:, 1]
+predicted_minutes = pred_21[:, 1]
+
+plt.plot(actual_scores, predicted_scores, "g.")
+plt.plot(actual_minutes, predicted_minutes, "r.")
 plt.plot(line_x, line_y, '-b', label='y=2x+1')
 plt.xlabel("actual")
 plt.ylabel("predicted")

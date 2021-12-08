@@ -103,7 +103,7 @@ def build_year_data(lookback, year_path):
     # what do I want to predict?
     prediction_headers = [
         "total_points",
-        # "minutes",
+        "minutes",
     ]
 
     X: list[ndarray] = []
@@ -139,8 +139,10 @@ def build_year_data(lookback, year_path):
                     last_three_years[i] = history_data[h_idx]["total_points"]
                     last_three_years[i + 3] = history_data[h_idx]["minutes"]
 
+            kvheaders = []
             for prediction_week in range(lookback, player_data.shape[1]):
                 known_values = last_three_years.copy()
+                kvheaders = [*kvheaders, *["ly_tp", "ly_tm", "ly_tp", "ly_tm", "ly_tp", "ly_tm"]]
 
                 for i in range(prediction_week - lookback, prediction_week):
                     gw = player_data[i]
