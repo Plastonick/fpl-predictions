@@ -5,7 +5,8 @@ import pandas as pd
 
 from keras.models import Sequential
 from keras.layers import Dense
-from numpy import ndarray
+from sklearn.preprocessing import StandardScaler as sc
+from sklearn.model_selection import train_test_split
 
 headers = [
     "assists",
@@ -54,7 +55,7 @@ def build_model(X, y):
     model.add(Dense(6, input_dim=X.shape[1], activation="relu"))
     model.add(Dense(6, activation="relu"))
     model.add(Dense(6, activation="relu"))
-    model.add(Dense(y.shape[1], activation="relu"))
+    model.add(Dense(y.shape[1], activation="sigmoid"))
 
     model.compile(loss="mae", metrics=["accuracy"], optimizer="adam")
 
@@ -63,7 +64,7 @@ def build_model(X, y):
     return model
 
 
-def build_training_data(directory) -> tuple[ndarray, ndarray]:
+def build_training_data(directory) -> tuple[np.ndarray, np.ndarray]:
     X = []
     y = []
     for year in ["2019-20", "2020-21"]:
@@ -106,8 +107,8 @@ def build_year_data(lookback, year_path):
         "minutes",
     ]
 
-    X: list[ndarray] = []
-    y: list[ndarray] = []
+    X: list[np.ndarray] = []
+    y: list[np.ndarray] = []
 
     players_path = os.path.join(year_path, "players")
     fixtures_path = os.path.join(year_path, "fixtures.csv")

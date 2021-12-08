@@ -33,7 +33,7 @@ y_21 = np.asarray(y_21)
 
 pred_21 = model.predict(X_21)
 
-line_x = np.linspace(-5, 25, 2)
+line_x = np.linspace(-5, 100, 2)
 line_y = 2 * line_x + 1
 
 actual_scores = y_21[:, 0]
