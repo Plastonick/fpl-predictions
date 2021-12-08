@@ -7,7 +7,8 @@ import sys
 
 model_save_location = 'model'
 fantasy_data_dir = os.getcwd() + "/Fantasy-Premier-League/data"
-if 1 in sys.argv and sys.argv[1] == 'build':
+
+if len(sys.argv) >= 2 and sys.argv[1] == 'build':
     X, y = modelbuilder.build_training_data(fantasy_data_dir)
 
     training_X = X[100:]
