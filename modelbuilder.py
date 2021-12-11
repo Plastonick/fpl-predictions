@@ -5,8 +5,6 @@ import pandas as pd
 
 from keras.models import Sequential
 from keras.layers import Dense
-from sklearn.preprocessing import StandardScaler as sc
-from sklearn.model_selection import train_test_split
 
 headers = [
     "assists",
@@ -52,10 +50,10 @@ def build_model(X, y):
 
     # define the keras model
     model = Sequential()
-    model.add(Dense(6, input_dim=X.shape[1], activation="relu"))
-    model.add(Dense(6, activation="relu"))
-    model.add(Dense(6, activation="relu"))
-    model.add(Dense(y.shape[1], activation="sigmoid"))
+    model.add(Dense(6, input_dim=X.shape[1], kernel_initializer="uniform", activation="relu"))
+    model.add(Dense(6, kernel_initializer="uniform", activation="relu"))
+    model.add(Dense(6, kernel_initializer="uniform", activation="relu"))
+    model.add(Dense(y.shape[1], kernel_initializer="uniform", activation="sigmoid"))
 
     model.compile(loss="mae", metrics=["accuracy"], optimizer="adam")
 
@@ -172,3 +170,52 @@ def build_year_data(lookback, year_path):
                 y.append(np.asarray(prediction_values, dtype=float))
 
     return X, y
+
+
+def build_actual_scores(year_path) -> dict:
+    # format: { id, name, position, team, predictions = [{ week, score, chanceOfPlaying, cost }] }
+
+    players = {}
+
+    players_raw_path = os.path.join(year_path, "players_raw.csv")
+    players_raw = pd.read_csv(players_raw_path).T
+
+    for i in players_raw:
+        player = players_raw[i]
+        players[player["id"]] = {
+            "name": f"{player['first_name']} {player['second_name']}",
+            "team": player["team"],
+            "position": player["element_type"]
+        }
+
+    players_path = os.path.join(year_path, 'players')
+    actuals = {}
+
+    for file in os.listdir(players_path):
+        filename = os.fsdecode(file)
+        player_path = os.path.join(players_path, filename)
+        if os.path.isdir(player_path):
+            player_gw_path = os.path.join(player_path, "gw.csv")
+            player_datas = pd.read_csv(player_gw_path).T
+
+            for i in player_datas:
+                player_data = player_datas[i]
+                player_id = player_data["element"]
+
+                if player_id not in actuals:
+                    actuals[player_id] = {
+                        "id": player_id,
+                        "name": players[player_id]["name"],
+                        "position": players[player_id]["position"],
+                        "team": players[player_id]["team"],
+                        "predictions": []
+                    }
+
+                actuals[player_id]["predictions"].append({
+                    "week": player_data["round"],
+                    "score": player_data["total_points"],
+                    "chanceOfPlaying": 1,
+                    "cost": player_data["value"]
+                })
+
+    return actuals
