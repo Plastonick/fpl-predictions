@@ -38,10 +38,10 @@ headers = [
 ]
 
 
-def build_training_data(directory) -> tuple[np.ndarray, np.ndarray]:
+def build_training_data(directory: str, years: list[str]) -> tuple[np.ndarray, np.ndarray]:
     X = []
     y = []
-    for year in ["2019-20", "2020-21"]:
+    for year in years:
         yr_X, yr_y = build_year_data(year_path=os.path.join(directory, year), lookback=5)
 
         X = [*X, *yr_X]

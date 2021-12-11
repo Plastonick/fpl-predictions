@@ -10,7 +10,7 @@ model_save_location = 'model'
 fantasy_data_dir = os.getcwd() + "/Fantasy-Premier-League/data"
 
 if len(sys.argv) >= 2 and sys.argv[1] == 'build':
-    X, y = dataextraction.build_training_data(fantasy_data_dir)
+    X, y = dataextraction.build_training_data(fantasy_data_dir, ["2019-20", "2020-21"])
 
     training_X = X
     training_y = y
