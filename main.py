@@ -1,6 +1,7 @@
 import keras
 import numpy as np
 import modelbuilder
+import dataextraction
 import matplotlib.pyplot as plt
 import os
 import sys
@@ -9,7 +10,7 @@ model_save_location = 'model'
 fantasy_data_dir = os.getcwd() + "/Fantasy-Premier-League/data"
 
 if len(sys.argv) >= 2 and sys.argv[1] == 'build':
-    X, y = modelbuilder.build_training_data(fantasy_data_dir)
+    X, y = dataextraction.build_training_data(fantasy_data_dir)
 
     training_X = X
     training_y = y
@@ -25,7 +26,7 @@ if len(sys.argv) >= 2 and sys.argv[1] == 'build':
 else:
     model = keras.models.load_model(model_save_location)
 
-X_21, y_21 = modelbuilder.build_year_data(lookback=5, year_path=os.path.join(fantasy_data_dir, "2021-22"))
+X_21, y_21 = dataextraction.build_year_data(lookback=5, year_path=os.path.join(fantasy_data_dir, "2021-22"))
 
 X_21 = np.asarray(X_21)
 y_21 = np.asarray(y_21)
