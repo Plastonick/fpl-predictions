@@ -2,4 +2,4 @@ numpy
 keras
 tensorflow
 pandas
-sklearn
+psycopg2
