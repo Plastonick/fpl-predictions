@@ -42,7 +42,7 @@ def build_training_data(directory: str, years: list[str]) -> tuple[np.ndarray, n
     X = []
     y = []
     for year in years:
-        yr_X, yr_y = build_year_data(year_path=os.path.join(directory, year), lookback=5)
+        yr_X, yr_y, _ = build_year_data(year_path=os.path.join(directory, year), lookback=5)
 
         X = [*X, *yr_X]
         y = [*y, *yr_y]
@@ -72,17 +72,18 @@ def build_year_data(lookback, year_path):
     # what important parts of completed games do I care about?
     look_back_headers = context_headers + [
         "total_points",
-        "minutes",
+        # "minutes",
     ]
 
     # what do I want to predict?
     prediction_headers = [
         "total_points",
-        "minutes",
+        # "minutes",
     ]
 
     X: list[np.ndarray] = []
     y: list[np.ndarray] = []
+    metadata = []
 
     players_path = os.path.join(year_path, "players")
     fixtures_path = os.path.join(year_path, "fixtures.csv")
@@ -111,16 +112,19 @@ def build_year_data(lookback, year_path):
 
                 for i in range(min(3, num_histories)):
                     h_idx = num_histories - i - 1
-                    last_three_years[i] = history_data[h_idx]["total_points"]
-                    last_three_years[i + 3] = history_data[h_idx]["minutes"]
+                    last_three_years[i] = history_data[h_idx]["total_points"] / 300
+                    last_three_years[i + 3] = history_data[h_idx]["minutes"] / 3420
 
             for prediction_week in range(lookback, player_data.shape[1]):
                 known_values = last_three_years.copy()
+                prediction_meta = {}
 
                 for i in range(prediction_week - lookback, prediction_week):
                     gw = player_data[i]
                     fixture_id = gw["fixture"]
                     was_home = gw["was_home"]
+                    prediction_meta["fixture"] = fixture_id
+                    prediction_meta["was_home"] = was_home
 
                     if was_home:
                         difficulty = fixture_difficulty_map[fixture_id][0]
@@ -140,27 +144,19 @@ def build_year_data(lookback, year_path):
                 for header in prediction_headers:
                     prediction_values.append(player_data[prediction_week][header])
 
+                prediction_meta["player_id"] = player_data[0]["element"]
+
                 X.append(np.asarray(known_values, dtype=float))
                 y.append(np.asarray(prediction_values, dtype=float))
+                metadata.append(prediction_meta)
 
-    return X, y
+    return X, y, metadata
 
 
 def build_actual_scores(year_path) -> dict:
     # format: { id, name, position, team, predictions = [{ week, score, chanceOfPlaying, cost }] }
 
-    players = {}
-
-    players_raw_path = os.path.join(year_path, "players_raw.csv")
-    players_raw = pd.read_csv(players_raw_path).T
-
-    for i in players_raw:
-        player = players_raw[i]
-        players[player["id"]] = {
-            "name": f"{player['first_name']} {player['second_name']}",
-            "team": player["team"],
-            "position": player["element_type"]
-        }
+    players = build_player_id_map(year_path)
 
     players_path = os.path.join(year_path, 'players')
     actuals = {}
@@ -195,3 +191,46 @@ def build_actual_scores(year_path) -> dict:
                 )
 
     return actuals
+
+
+def build_player_id_map(year_path):
+    players = {}
+    players_raw_path = os.path.join(year_path, "players_raw.csv")
+    players_raw = pd.read_csv(players_raw_path).T
+    for i in players_raw:
+        player = players_raw[i]
+        players[player["id"]] = {
+            "name": f"{player['first_name']} {player['second_name']}",
+            "team": player["team"],
+            "position": player["element_type"]
+        }
+
+    return players
+
+
+def build_fixture_id_map(year_path):
+    fixtures = {}
+    path = os.path.join(year_path, "fixtures.csv")
+    csv = pd.read_csv(path).T
+    for i in csv:
+        fixture = csv[i]
+        fixtures[fixture["id"]] = {
+            "home_team_id": fixture["team_h"],
+            "away_team_id": fixture["team_a"]
+        }
+
+    return fixtures
+
+
+def build_team_id_map(year_path):
+    teams = {}
+    teams_raw_path = os.path.join(year_path, "teams.csv")
+    csv = pd.read_csv(teams_raw_path).T
+    for i in csv:
+        element = csv[i]
+        teams[element["id"]] = {
+            "name": element["name"]
+        }
+
+    return teams
+
