@@ -2,9 +2,12 @@ import keras
 import numpy as np
 import kerasmodel
 import dataextraction
+import sqlextraction
 import matplotlib.pyplot as plt
 import os
 import sys
+
+sqlextraction.build_training_data()
 
 model_save_location = 'model'
 fantasy_data_dir = os.getcwd() + "/Fantasy-Premier-League/data"
