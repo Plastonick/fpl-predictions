@@ -3,7 +3,7 @@ import psycopg2
 from itertools import chain
 
 
-def build_training_data(lookback=5) -> tuple[np.ndarray, np.ndarray]:
+def build_training_data(form_size=5) -> tuple[np.ndarray, np.ndarray]:
     records_by_player = build_records_per_player()
 
     X = []
@@ -11,9 +11,12 @@ def build_training_data(lookback=5) -> tuple[np.ndarray, np.ndarray]:
     for player_id in records_by_player:
         records = records_by_player[player_id]
 
-        for i in range(len(records) - lookback):
-            X.append(list(chain.from_iterable(records[i: i + lookback])))
-            y.append([records[i + lookback][0]])
+        # look_ahead represents how many fixtures ahead the game we're predicting is
+        for look_ahead in range(10):
+            for i in range(len(records) - form_size - look_ahead):
+                # include the number of games look_ahead we're including in the context to let ML know that
+                X.append(list(chain.from_iterable(records[i - look_ahead: i + form_size - look_ahead])) + [look_ahead])
+                y.append([records[i + form_size][0]])
 
     return np.asarray(X), np.asarray(y)
 
@@ -83,6 +86,9 @@ def get_context(season: int):
     players = get_player_and_team_ids_for_season(2021)
 
 
+    # get all un-played fixtures
+    # generate context for all un-played fixtures and for all players
+    # return to allow predictions
 
     return 1
 
@@ -107,6 +113,36 @@ WHERE s.start_year = {season};
     return cursor.fetchall()
 
 
-players = get_player_and_team_ids_for_season(2021)
+def get_un_played_fixtures(season: int) -> list[tuple[int, int]]:
+    sql = f"""
+SELECT home_team_id,
+    away_team_id,
+    team_h_difficulty,
+    team_a_difficulty,
+    kickoff_time,
+FROM fixtures f
+         LEFT JOIN player_performances pp ON f.fixture_id = pp.fixture_id
+         INNER JOIN seasons s ON f.season_id = s.season_id
+WHERE s.start_year = {season}
+    AND pp.player_performance_id IS NULL;
+"""
+
+    cursor = get_cursor()
+    cursor.execute(sql)
+
+    fixtures_data = {}
+    for record in cursor.fetchall():
+
+
+    return cursor.fetchall()
+
+
+# players = get_player_and_team_ids_for_season(2021)
+#
+# print(players)
+
+X, y = build_training_data(form_size=5)
+
+print(X)
 
 a = 1

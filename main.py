@@ -14,7 +14,7 @@ fantasy_data_dir = os.getcwd() + "/Fantasy-Premier-League/data"
 
 if len(sys.argv) >= 2 and sys.argv[1] == 'build':
     # X2, y2 = dataextraction.build_training_data(directory=fantasy_data_dir, years=["2020-21"])
-    X, y = sqlextraction.build_training_data(lookback=5)
+    X, y = sqlextraction.build_training_data(form_size=5)
 
     training_X = X
     training_y = y
