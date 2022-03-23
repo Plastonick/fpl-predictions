@@ -1,20 +1,16 @@
 import keras
 import numpy as np
 import kerasmodel
-import dataextraction
 import sqlextraction
 import matplotlib.pyplot as plt
-import os
 import sys
 
-sqlextraction.build_training_data()
+extractor = sqlextraction.Extractor()
 
 model_save_location = 'model'
-fantasy_data_dir = os.getcwd() + "/Fantasy-Premier-League/data"
 
 if len(sys.argv) >= 2 and sys.argv[1] == 'build':
-    # X2, y2 = dataextraction.build_training_data(directory=fantasy_data_dir, years=["2020-21"])
-    X, y = sqlextraction.build_training_data(form_size=5)
+    X, y = extractor.build_training_data()
 
     training_X = X
     training_y = y
@@ -31,7 +27,7 @@ else:
     model = keras.models.load_model(model_save_location)
 
 # [6x last year, 5x look back { diff, home, points, minutes }]
-X_21, y_21 = dataextraction.build_year_data(lookback=5, year_path=os.path.join(fantasy_data_dir, "2021-22"))
+X_21 = extractor.get_context(season=2021)
 
 X_21 = np.asarray(X_21)
 y_21 = np.asarray(y_21)

@@ -4,10 +4,25 @@ from itertools import chain
 
 
 class Extractor:
-    def __init__(self, lookahead: int = 10):
+    def __init__(self, lookahead: int = 10, form_size: int = 5):
+        # lookahead is how many games in advance we'd like to generate training data for. i.e. "what did the player get
+        # <lookahead> matches after the last data we have for them". This is useful when we want to predict a players
+        # score <lookahead> matches in the future.
         self.lookahead = lookahead
 
-    def build_training_data(self, form_size: int = 5) -> tuple[np.ndarray, np.ndarray]:
+        # this represents how many finished matches we'll consider for this player.
+        self.form_size = form_size
+
+    def build_training_data(self) -> tuple[np.ndarray, np.ndarray]:
+        """Builds training data for our fantasy prediction
+
+        Parameters:
+        argument1 (int): Description of arg1
+
+        Returns:
+        int:Returning value
+
+       """
         records_by_player = self.build_records_per_player()
 
         X = []
@@ -16,13 +31,18 @@ class Extractor:
             records = records_by_player[player_id]
 
             # look_ahead represents how many fixtures ahead the game we're predicting is
+            # we generate data for up to lookahead
             for look_ahead in range(self.lookahead):
-                for i in range(len(records) - form_size - look_ahead):
+                for i in range(len(records) - self.form_size - look_ahead):
                     # include the number of games look_ahead we're including in the context to let ML know that
-                    X.append(
-                        list(chain.from_iterable(records[i - look_ahead: i + form_size - look_ahead])) + [look_ahead]
+                    previous_fixture_data = list(
+                        chain.from_iterable(records[i - look_ahead: i + self.form_size - look_ahead])
                     )
-                    y.append([records[i + form_size][0]])
+                    upcoming_fixture_context = list(records[i + self.form_size][2:])
+                    upcoming_fixture_points = records[i + self.form_size][0]
+
+                    X.append(np.asarray(previous_fixture_data + upcoming_fixture_context + [look_ahead]))
+                    y.append(np.asarray([upcoming_fixture_points]))
 
         return np.asarray(X), np.asarray(y)
 
@@ -37,11 +57,10 @@ class Extractor:
            COALESCE(f.team_h_difficulty, 0),
            COALESCE(f.team_a_difficulty, 0),
            pp.minutes,
-           p.position_id
+           psp.position_id
     FROM player_performances pp
              INNER JOIN fixtures f ON pp.fixture_id = f.fixture_id
              INNER JOIN player_season_positions psp ON (f.season_id = psp.season_id AND pp.player_id = psp.player_id)
-             INNER JOIN positions p ON psp.position_id = p.position_id
     ORDER BY pp.player_id, pp.kickoff_time DESC;
         """
         cursor.execute(sql)
@@ -58,15 +77,16 @@ class Extractor:
                 position,
         ) in records:
             if player_id not in records_by_player:
-                records_by_player[player_id] = [np.zeros(6) for _ in range(self.lookahead)]
+                # initialise our player records with some blank records
+                records_by_player[player_id] = [np.zeros(6) for _ in range(self.form_size + self.lookahead)]
 
             records_by_player[player_id].append(
                 [
                     total_points,
+                    minutes,
                     was_home,
                     home_difficulty,
                     away_difficulty,
-                    minutes,
                     position,
                 ]
             )
@@ -86,25 +106,33 @@ class Extractor:
         return cursor
 
     def get_context(self, season: int):
-        players = self.get_player_and_team_ids_for_season(2021)
+        players = self.get_player_static_context(season)
+
+        X = []
 
         # get all un-played fixtures
+        unplayed_fixtures = self.get_un_played_fixtures_by_team(season=season)
+
         # generate context for all un-played fixtures and for all players
-        # return to allow predictions
+        # for each player, get their last "form_size" records
+        records_by_player = self.build_records_per_player()
+        for (player_id, last_team_id, position_id) in players:
+            records = records_by_player[player_id]
+            form = list(chain.from_iterable(records[-self.form_size:]))
+            team_unplayed_fixtures = unplayed_fixtures[last_team_id]
+            lookahead = 0
+            for fixture in team_unplayed_fixtures:
+                X.append(form + list(fixture) + [position_id] + [lookahead])
+                lookahead += 1
 
-        return 1
+        return X
 
-    def get_player_and_team_ids_for_season(self, season: int) -> list[tuple[int, int]]:
+    def get_player_static_context(self, season: int) -> list[tuple[int, int, int]]:
         sql = f"""
-    SELECT DISTINCT pp.player_id,
-                    ( SELECT team_id
-                      FROM player_performances pp2
-                      WHERE pp2.player_id = pp.player_id
-                      ORDER BY pp2.kickoff_time DESC
-                      LIMIT 1 ) AS player_team_id
-    FROM player_performances pp
-             INNER JOIN fixtures f ON pp.fixture_id = f.fixture_id
-             INNER JOIN seasons s ON f.season_id = s.season_id
+    SELECT p.player_id, p.last_team_id, psp.position_id
+    FROM players p
+             INNER JOIN player_season_positions psp ON p.player_id = psp.player_id
+             INNER JOIN seasons s ON psp.season_id = s.season_id
     WHERE s.start_year = {season};
     """
 
@@ -113,38 +141,51 @@ class Extractor:
 
         return cursor.fetchall()
 
-    def get_un_played_fixtures(self, season: int) -> list[tuple[int, int]]:
+    def get_un_played_fixtures_by_team(self, season: int) -> dict[int, tuple[int, int, int]]:
         sql = f"""
     SELECT home_team_id,
         away_team_id,
         team_h_difficulty,
         team_a_difficulty,
-        kickoff_time,
+        kickoff_time
     FROM fixtures f
-             LEFT JOIN player_performances pp ON f.fixture_id = pp.fixture_id
              INNER JOIN seasons s ON f.season_id = s.season_id
     WHERE s.start_year = {season}
-        AND pp.player_performance_id IS NULL;
+      AND f.finished_provisional = FALSE
+      AND f.kickoff_time IS NOT NULL
+    ORDER BY f.kickoff_time ASC;
     """
 
         cursor = self.get_cursor()
         cursor.execute(sql)
 
-        fixtures_data = {}
-        for record in cursor.fetchall():
-            print(1)
+        fixtures_by_team = {}
+        for (
+                home_team_id,
+                away_team_id,
+                team_h_difficulty,
+                team_a_difficulty,
+                kickoff_time
+        ) in cursor.fetchall():
+            if home_team_id not in fixtures_by_team:
+                fixtures_by_team[home_team_id] = []
+            if away_team_id not in fixtures_by_team:
+                fixtures_by_team[away_team_id] = []
 
-        return cursor.fetchall()
+            fixtures_by_team[home_team_id].append(
+                (
+                    1,  # was_home
+                    team_h_difficulty,
+                    team_a_difficulty
+                )
+            )
 
+            fixtures_by_team[away_team_id].append(
+                (
+                    0,  # was_home
+                    team_h_difficulty,
+                    team_a_difficulty
+                )
+            )
 
-# players = get_player_and_team_ids_for_season(2021)
-#
-# print(players)
-
-extractor = Extractor()
-
-X, y = extractor.build_training_data(form_size=5)
-
-print(X)
-
-a = 1
+        return fixtures_by_team
