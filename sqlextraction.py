@@ -33,7 +33,7 @@ class Extractor:
             # look_ahead represents how many fixtures ahead the game we're predicting is
             # we generate data for up to lookahead
             for look_ahead in range(self.lookahead):
-                for i in range(len(records) - self.form_size - look_ahead):
+                for i in range(look_ahead, len(records) - self.form_size - look_ahead):
                     # include the number of games look_ahead we're including in the context to let ML know that
                     previous_fixture_data = list(
                         chain.from_iterable(records[i - look_ahead: i + self.form_size - look_ahead])
@@ -41,8 +41,10 @@ class Extractor:
                     upcoming_fixture_context = list(records[i + self.form_size][2:])
                     upcoming_fixture_points = records[i + self.form_size][0]
 
-                    X.append(np.asarray(previous_fixture_data + upcoming_fixture_context + [look_ahead]))
-                    y.append(np.asarray([upcoming_fixture_points]))
+                    context = previous_fixture_data + upcoming_fixture_context + [look_ahead]
+
+                    X.append(context)
+                    y.append([upcoming_fixture_points])
 
         return np.asarray(X), np.asarray(y)
 
@@ -78,7 +80,7 @@ class Extractor:
         ) in records:
             if player_id not in records_by_player:
                 # initialise our player records with some blank records
-                records_by_player[player_id] = [np.zeros(6) for _ in range(self.form_size + self.lookahead)]
+                records_by_player[player_id] = [[0 for _ in range(6)] for _ in range(self.form_size + self.lookahead)]
 
             records_by_player[player_id].append(
                 [
@@ -109,6 +111,7 @@ class Extractor:
         players = self.get_player_static_context(season)
 
         X = []
+        context = []
 
         # get all un-played fixtures
         unplayed_fixtures = self.get_un_played_fixtures_by_team(season=season)
@@ -121,11 +124,12 @@ class Extractor:
             form = list(chain.from_iterable(records[-self.form_size:]))
             team_unplayed_fixtures = unplayed_fixtures[last_team_id]
             lookahead = 0
-            for fixture in team_unplayed_fixtures:
-                X.append(form + list(fixture) + [position_id] + [lookahead])
+            for (fixture_id, was_home, home_diff, away_diff) in team_unplayed_fixtures:
+                X.append(form + [was_home, home_diff, away_diff] + [position_id] + [lookahead])
+                context.append((player_id, fixture_id))
                 lookahead += 1
 
-        return X
+        return X, context
 
     def get_player_static_context(self, season: int) -> list[tuple[int, int, int]]:
         sql = f"""
@@ -143,7 +147,9 @@ class Extractor:
 
     def get_un_played_fixtures_by_team(self, season: int) -> dict[int, tuple[int, int, int]]:
         sql = f"""
-    SELECT home_team_id,
+    SELECT 
+        fixture_id,
+        home_team_id,
         away_team_id,
         team_h_difficulty,
         team_a_difficulty,
@@ -161,6 +167,7 @@ class Extractor:
 
         fixtures_by_team = {}
         for (
+                fixture_id,
                 home_team_id,
                 away_team_id,
                 team_h_difficulty,
@@ -174,6 +181,7 @@ class Extractor:
 
             fixtures_by_team[home_team_id].append(
                 (
+                    fixture_id,
                     1,  # was_home
                     team_h_difficulty,
                     team_a_difficulty
@@ -182,6 +190,7 @@ class Extractor:
 
             fixtures_by_team[away_team_id].append(
                 (
+                    fixture_id,
                     0,  # was_home
                     team_h_difficulty,
                     team_a_difficulty
