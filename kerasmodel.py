@@ -1,5 +1,7 @@
 from keras.models import Sequential
 from keras.layers import Dense
+from keras.layers import Normalization
+
 
 
 def build_model(X, y):
@@ -11,12 +13,14 @@ def build_model(X, y):
 
     # define the keras model
     model = Sequential()
-    model.add(Dense(6, input_dim=X.shape[1], kernel_initializer="uniform", activation="relu"))
-    model.add(Dense(6, kernel_initializer="uniform", activation="relu"))
-    model.add(Dense(6, kernel_initializer="uniform", activation="relu"))
-    model.add(Dense(y.shape[1], kernel_initializer="uniform", activation="sigmoid"))
+    model.add(Dense(20, input_dim=X.shape[1]))
+    model.add(Dense(20))
+    model.add(Dense(20))
+    model.add(Dense(y.shape[1]))
 
-    model.compile(loss="mae", metrics=["accuracy"], optimizer="adam")
+    normalizer = Normalization(axis=-1)
+
+    model.compile(loss="mse", metrics=["accuracy"], optimizer="adam")
 
     model.fit(training_X, training_y, epochs=5, batch_size=10, validation_data=(validation_X, validation_y))
 

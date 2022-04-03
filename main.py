@@ -1,4 +1,4 @@
-import keras
+from keras.models import load_model
 import numpy as np
 import kerasmodel
 import sqlextraction
@@ -24,9 +24,10 @@ if len(sys.argv) >= 2 and sys.argv[1] == 'build':
     _, accuracy = model.evaluate(training_X, training_y)
     print("Accuracy: %.2f" % (accuracy * 100))
 else:
-    model = keras.models.load_model(model_save_location)
+    model = load_model(model_save_location)
 
 # [6x last year, 5x look back { diff, home, points, minutes }]
+
 X_21, context = extractor.get_context(season=2021)
 
 X_21 = np.asarray(X_21)
