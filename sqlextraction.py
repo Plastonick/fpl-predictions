@@ -120,6 +120,9 @@ class Extractor:
         # for each player, get their last "form_size" records
         records_by_player = self.build_records_per_player()
         for (player_id, last_team_id, position_id) in players:
+            if player_id not in records_by_player:
+                continue
+
             records = records_by_player[player_id]
             form = list(chain.from_iterable(records[-self.form_size:]))
             team_unplayed_fixtures = unplayed_fixtures[last_team_id]
