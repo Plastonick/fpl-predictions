@@ -1,5 +1,7 @@
 FROM python:3.9-slim
 
+RUN apk add --no-cache libpq-devel
+
 # create and setup working directory
 RUN mkdir /app
 

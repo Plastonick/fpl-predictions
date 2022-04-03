@@ -1,16 +1,16 @@
 from keras.models import load_model
 import numpy as np
 import kerasmodel
-import dataextraction
+import sqlextraction
 import matplotlib.pyplot as plt
-import os
 import sys
 
+extractor = sqlextraction.Extractor()
+
 model_save_location = 'model'
-fantasy_data_dir = os.getcwd() + "/Fantasy-Premier-League/data"
 
 if len(sys.argv) >= 2 and sys.argv[1] == 'build':
-    X, y = dataextraction.build_training_data(fantasy_data_dir, ["2019-20", "2020-21"])
+    X, y = extractor.build_training_data()
 
     training_X = X
     training_y = y
@@ -27,52 +27,40 @@ else:
     model = load_model(model_save_location)
 
 # [6x last year, 5x look back { diff, home, points, minutes }]
-year_path = os.path.join(fantasy_data_dir, "2021-22")
-X_21, y_21, metadata = dataextraction.build_year_data(lookback=5, year_path=year_path)
-player_id_map = dataextraction.build_player_id_map(year_path)
-fixture_id_map = dataextraction.build_fixture_id_map(year_path)
-team_id_map = dataextraction.build_team_id_map(year_path)
+
+X_21, context = extractor.get_context(season=2021)
 
 X_21 = np.asarray(X_21)
-y_21 = np.asarray(y_21)
 
-last_five_scores = [sum(scores) / len(scores) for scores in X_21[:, 8:-1:4]]
-actual_scores = y_21[:, 0]
+predictions_21 = model.predict(X_21)
 
-plt.plot(last_five_scores, actual_scores, "g.")
-# plt.plot(actual_minutes, predicted_minutes, "r.")
-plt.xlabel("actual")
-plt.ylabel("avg last five")
-plt.show()
+for i in range(len(predictions_21)):
+    print("predict player ", context[i][0], " for fixture ", context[i][1], " to get ", predictions_21[i][0], " points")
 
-
-
-pred_21 = model.predict(X_21)
-
-for i in range(len(pred_21)):
-    fixture = fixture_id_map[metadata[i]["fixture"]]
-    home = metadata[i]["was_home"]
-    if home:
-        opponent = team_id_map[fixture["away_team_id"]]
-    else:
-        opponent = team_id_map[fixture["home_team_id"]]
-
-    player = player_id_map[metadata[i]["player_id"]]
-    prediction = round(pred_21[i][0], 2)
-    print(f"predicted {prediction} for player '{player['name']}' {'home' if home else 'away'} against {opponent['name']}")
-
-line_x = np.linspace(-5, 30, 2)
-line_y = 2 * line_x
-
-actual_scores = y_21[:, 0]
-predicted_scores = pred_21[:, 0]
-
+# last_five_scores = [sum(scores) / len(scores) for scores in X_21[:, 8:-1:4]]
+#
+# plt.plot(last_five_scores, actual_scores, "g.")
+# # plt.plot(actual_minutes, predicted_minutes, "r.")
+# plt.xlabel("actual")
+# plt.ylabel("avg last five")
+# plt.show()
+#
+#
+#
+# pred_21 = model.predict(X_21)
+#
+# line_x = np.linspace(-5, 30, 2)
+# line_y = 2 * line_x
+#
+# actual_scores = y_21[:, 0]
+# predicted_scores = pred_21[:, 0]
+#
 # actual_minutes = y_21[:, 1]
 # predicted_minutes = pred_21[:, 1]
-
-plt.plot(actual_scores, predicted_scores, "g.")
-# plt.plot(actual_minutes, predicted_minutes, "r.")
-plt.plot(line_x, line_y, '-b', label='y=2x+1')
-plt.xlabel("actual")
-plt.ylabel("predicted")
-plt.show()
+#
+# plt.plot(actual_scores, predicted_scores, "g.")
+# # plt.plot(actual_minutes, predicted_minutes, "r.")
+# plt.plot(line_x, line_y, '-b', label='y=2x+1')
+# plt.xlabel("actual")
+# plt.ylabel("predicted")
+# plt.show()
